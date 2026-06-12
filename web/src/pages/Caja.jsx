@@ -41,7 +41,7 @@ function ScannerModal({ onScan, onClose }) {
   }, [onScan])
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">Escanear código de barras</h3>
@@ -70,7 +70,7 @@ function QuickAddModal({ sugerido, onSave, onClose, saving }) {
   function handleKey(e) { if (e.key === 'Enter') handleSave() }
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center">
       <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 pb-24 space-y-4 max-h-[85vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start gap-3">
@@ -128,7 +128,7 @@ function PayModal({ total, onPay, onClose, loading }) {
   const vuelto = Math.max(0, parseFloat(efectivo || 0) - total)
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center">
       <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 pb-24 space-y-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-lg">Cobrar venta</h3>
@@ -366,7 +366,7 @@ export default function Caja() {
 
       {/* Barcode lookup spinner */}
       {lookingUp && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center">
           <div className="bg-white rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-xl">
             <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <p className="font-medium text-gray-700">Buscando producto...</p>

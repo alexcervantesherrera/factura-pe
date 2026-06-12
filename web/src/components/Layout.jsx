@@ -41,7 +41,7 @@ export default function Layout() {
       </main>
 
       {/* Bottom nav (mobile POS) */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-50">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex z-[90]">
         {nav.map(({ to, icon, label }) => (
           <NavLink
             key={to}
