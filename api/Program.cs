@@ -111,14 +111,26 @@ app.MapPost("/auth/login", async (LoginDto dto, AppDbContext db) =>
 
 // ── PRODUCTOS ─────────────────────────────────────────────────────────────────
 
-app.MapGet("/productos", async (string? q, ClaimsPrincipal claims, AppDbContext db) =>
+app.MapGet("/productos", async (string? q, int? page, int? pageSize, ClaimsPrincipal claims, AppDbContext db) =>
 {
     var eid   = EmpresaId(claims);
     var query = db.Productos.Where(p => p.EmpresaId == eid && p.Activo);
     if (!string.IsNullOrWhiteSpace(q))
         query = query.Where(p => p.Nombre.ToLower().Contains(q.ToLower())
                               || (p.CodigoBarras != null && p.CodigoBarras.Contains(q)));
-    return Results.Ok(await query.OrderBy(p => p.Nombre).Take(100).ToListAsync());
+
+    // If page param present → paginated response; otherwise flat array (used by Caja search)
+    if (page.HasValue)
+    {
+        var ps    = Math.Clamp(pageSize ?? 25, 1, 100);
+        var pg    = Math.Max(1, page.Value);
+        var total = await query.CountAsync();
+        var items = await query.OrderBy(p => p.Nombre).Skip((pg - 1) * ps).Take(ps).ToListAsync();
+        return Results.Ok(new { items, total, page = pg, pages = (int)Math.Ceiling(total / (double)ps) });
+    }
+
+    // Flat array — Caja search, barcode lookup, etc.
+    return Results.Ok(await query.OrderBy(p => p.Nombre).Take(50).ToListAsync());
 }).RequireAuthorization();
 
 app.MapGet("/productos/barcode/{code}", async (

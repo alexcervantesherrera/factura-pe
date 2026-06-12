@@ -8,10 +8,15 @@ const empty = {
   imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false, unidad: 'pz',
 }
 
+const PAGE_SIZE = 25
+
 export default function Productos() {
   const [productos, setProductos] = useState([])
+  const [total, setTotal]         = useState(0)
+  const [page, setPage]           = useState(1)
+  const [pages, setPages]         = useState(1)
   const [search, setSearch]       = useState('')
-  const [editing, setEditing]     = useState(null)  // null | {} | {id,...}
+  const [editing, setEditing]     = useState(null)
   const [form, setForm]           = useState(empty)
   const [loading, setLoading]     = useState(false)
   const [barcodeSearching, setBarcodeSearching] = useState(false)
@@ -19,15 +24,20 @@ export default function Productos() {
   const [importMsg, setImportMsg] = useState(null)
   const photoRef = useRef(null)
 
-  async function load(q = '') {
-    const { data } = await api.get('/productos', { params: q ? { q } : {} })
-    setProductos(data)
+  async function load(q = '', pg = 1) {
+    const params = { page: pg, pageSize: PAGE_SIZE }
+    if (q) params.q = q
+    const { data } = await api.get('/productos', { params })
+    setProductos(data.items)
+    setTotal(data.total)
+    setPage(data.page)
+    setPages(data.pages)
   }
 
   useEffect(() => { load() }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => load(search), 300)
+    const t = setTimeout(() => { load(search, 1) }, 300)
     return () => clearTimeout(t)
   }, [search])
 
@@ -88,7 +98,7 @@ export default function Productos() {
       if (editing.id) await api.put(`/productos/${editing.id}`, body)
       else            await api.post('/productos', body)
       close()
-      load(search)
+      load(search, page)
     } catch (err) {
       alert(err.response?.data || 'Error al guardar')
     } finally {
@@ -101,7 +111,7 @@ export default function Productos() {
     try {
       const { data } = await api.post('/productos/importar-defaults')
       setImportMsg({ type: 'ok', text: data.mensaje })
-      if (data.importados > 0) load(search)
+      if (data.importados > 0) load(search, 1)
     } catch {
       setImportMsg({ type: 'err', text: 'Error al importar catálogo' })
     } finally {
@@ -113,7 +123,7 @@ export default function Productos() {
   async function deactivate(id) {
     if (!confirm('¿Desactivar este producto?')) return
     await api.delete(`/productos/${id}`)
-    load(search)
+    load(search, page)
   }
 
   return (
@@ -171,6 +181,32 @@ export default function Productos() {
           </div>
         )}
       </div>
+
+      {/* Pagination */}
+      {pages > 1 && (
+        <div className="flex items-center justify-between pt-2 pb-4">
+          <button
+            onClick={() => load(search, page - 1)}
+            disabled={page <= 1}
+            className="btn-ghost px-4 py-2 text-sm disabled:opacity-40">
+            ← Anterior
+          </button>
+          <span className="text-sm text-gray-500">
+            Página {page} de {pages} · <span className="font-medium">{total} productos</span>
+          </span>
+          <button
+            onClick={() => load(search, page + 1)}
+            disabled={page >= pages}
+            className="btn-ghost px-4 py-2 text-sm disabled:opacity-40">
+            Siguiente →
+          </button>
+        </div>
+      )}
+
+      {/* total count when single page */}
+      {pages <= 1 && total > 0 && (
+        <p className="text-xs text-center text-gray-400 pb-2">{total} producto{total !== 1 ? 's' : ''}</p>
+      )}
 
       {/* Modal — z-[100] so it sits above bottom nav (z-[90]) */}
       {editing !== null && (
