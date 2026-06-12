@@ -71,7 +71,7 @@ function QuickAddModal({ sugerido, onSave, onClose, saving }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
-      <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 space-y-4">
+      <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 pb-24 space-y-4 max-h-[85vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start gap-3">
           {sugerido?.imagen && (
@@ -129,7 +129,7 @@ function PayModal({ total, onPay, onClose, loading }) {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
-      <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 space-y-4">
+      <div className="bg-white rounded-t-2xl w-full max-w-sm p-5 pb-24 space-y-4 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-lg">Cobrar venta</h3>
           <button onClick={onClose} className="text-gray-400 text-xl">✕</button>
