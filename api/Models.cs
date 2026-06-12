@@ -44,6 +44,7 @@ public class Producto
     public bool   AplicaIgv    { get; set; } = true;
     public int    Stock        { get; set; } = 0;
     public bool   ControlStock { get; set; } = false;
+    [MaxLength(5)] public string Unidad { get; set; } = "pz"; // pz | kg | g | L
     public bool   Activo       { get; set; } = true;
     public DateTime CreadoEn  { get; set; } = DateTime.UtcNow;
     public Empresa Empresa     { get; set; } = null!;
@@ -87,7 +88,7 @@ public class DetalleVenta
     public Guid   ProductoId       { get; set; }
     [MaxLength(300)] public string NombreProducto { get; set; } = "";
     [Column(TypeName="decimal(12,2)")] public decimal PrecioUnitario { get; set; }
-    public int    Cantidad         { get; set; }
+    [Column(TypeName="decimal(10,3)")] public decimal Cantidad       { get; set; }
     [Column(TypeName="decimal(12,2)")] public decimal Subtotal { get; set; }
     [Column(TypeName="decimal(12,2)")] public decimal Igv      { get; set; }
     [Column(TypeName="decimal(12,2)")] public decimal Total    { get; set; }

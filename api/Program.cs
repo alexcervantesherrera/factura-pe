@@ -154,6 +154,7 @@ app.MapPost("/productos", async (ProductoDto dto, ClaimsPrincipal claims, AppDbC
         EmpresaId = EmpresaId(claims), CodigoBarras = dto.CodigoBarras,
         Nombre = dto.Nombre, Categoria = dto.Categoria, ImagenUrl = dto.ImagenUrl,
         Precio = dto.Precio, AplicaIgv = dto.AplicaIgv, Stock = dto.Stock, ControlStock = dto.ControlStock,
+        Unidad = dto.Unidad ?? "pz",
     };
     db.Productos.Add(p);
     await db.SaveChangesAsync();
@@ -165,8 +166,8 @@ app.MapPut("/productos/{id:guid}", async (Guid id, ProductoDto dto, ClaimsPrinci
     var eid = EmpresaId(claims);
     var p = await db.Productos.FirstOrDefaultAsync(x => x.Id == id && x.EmpresaId == eid);
     if (p is null) return Results.NotFound();
-    (p.CodigoBarras, p.Nombre, p.Categoria, p.ImagenUrl, p.Precio, p.AplicaIgv, p.Stock, p.ControlStock) =
-        (dto.CodigoBarras, dto.Nombre, dto.Categoria, dto.ImagenUrl, dto.Precio, dto.AplicaIgv, dto.Stock, dto.ControlStock);
+    (p.CodigoBarras, p.Nombre, p.Categoria, p.ImagenUrl, p.Precio, p.AplicaIgv, p.Stock, p.ControlStock, p.Unidad) =
+        (dto.CodigoBarras, dto.Nombre, dto.Categoria, dto.ImagenUrl, dto.Precio, dto.AplicaIgv, dto.Stock, dto.ControlStock, dto.Unidad ?? p.Unidad);
     await db.SaveChangesAsync();
     return Results.Ok(p);
 }).RequireAuthorization();
@@ -258,7 +259,7 @@ app.MapPost("/ventas", async (VentaDto dto, ClaimsPrincipal claims, AppDbContext
             ProductoId = prod.Id, NombreProducto = prod.Nombre, PrecioUnitario = precioUnit,
             Cantidad = item.Cantidad, Subtotal = itemSub, Igv = itemIgv, Total = itemTotal,
         });
-        if (prod.ControlStock) prod.Stock -= item.Cantidad;
+        if (prod.ControlStock) prod.Stock -= (int)Math.Round(item.Cantidad);
     }
 
     var venta = new Venta

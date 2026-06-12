@@ -4,9 +4,9 @@ record RegisterDto(string Ruc, string RazonSocial, string? Direccion,
     string? SolUsuario, string? SolPassword, string NombreAdmin, string Email, string Password);
 record LoginDto(string Email, string Password);
 record ProductoDto(string? CodigoBarras, string Nombre, string? Categoria, string? ImagenUrl,
-    decimal Precio, bool AplicaIgv, int Stock, bool ControlStock);
+    decimal Precio, bool AplicaIgv, int Stock, bool ControlStock, string? Unidad);
 record ClienteDto(string TipoDoc, string NumDoc, string Nombre, string? Email, string? Telefono);
-record VentaItemDto(Guid ProductoId, int Cantidad, decimal? PrecioOverride);
+record VentaItemDto(Guid ProductoId, decimal Cantidad, decimal? PrecioOverride);
 record VentaDto(List<VentaItemDto> Items, Guid? ClienteId, string? TipoComprobante);
 
 class OFFResponse { public int Status { get; set; } public OFFProduct? Product { get; set; } }

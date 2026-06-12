@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../api'
 
+const UNITS = [['pz','📦 Pieza'],['kg','⚖️ Kilo'],['g','🏷️ Gramo'],['L','🥛 Litro']]
+
 const empty = {
   codigoBarras: '', nombre: '', categoria: '',
-  imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false,
+  imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false, unidad: 'pz',
 }
 
 export default function Productos() {
@@ -34,7 +36,7 @@ export default function Productos() {
       codigoBarras: p.codigoBarras || '', nombre: p.nombre,
       categoria: p.categoria || '', imagenUrl: p.imagenUrl || '',
       precio: p.precio, aplicaIgv: p.aplicaIgv,
-      stock: p.stock, controlStock: p.controlStock,
+      stock: p.stock, controlStock: p.controlStock, unidad: p.unidad || 'pz',
     })
   }
   function close() { setEditing(null) }
@@ -80,7 +82,7 @@ export default function Productos() {
   async function save() {
     setLoading(true)
     try {
-      const body = { ...form, precio: parseFloat(form.precio), stock: parseInt(form.stock) || 0 }
+      const body = { ...form, precio: parseFloat(form.precio), stock: parseInt(form.stock) || 0, unidad: form.unidad || 'pz' }
       if (editing.id) await api.put(`/productos/${editing.id}`, body)
       else            await api.post('/productos', body)
       close()
@@ -121,7 +123,7 @@ export default function Productos() {
             </div>
             <div className="text-right">
               <p className="font-bold text-green-700">S/ {parseFloat(p.precio).toFixed(2)}</p>
-              <p className="text-xs text-gray-400">{p.aplicaIgv ? '+IGV' : 'Exonerado'}</p>
+              <p className="text-xs text-gray-400">/{p.unidad || 'pz'} {p.aplicaIgv ? '· IGV' : '· Exon.'}</p>
             </div>
             <div className="flex flex-col gap-1">
               <button onClick={() => openEdit(p)} className="text-xs text-blue-600 hover:underline">Editar</button>
@@ -206,9 +208,22 @@ export default function Productos() {
               <input className="input" value={form.nombre} onChange={set('nombre')} required />
             </div>
 
+            {/* Unit selector */}
+            <div>
+              <label className="label">Se vende por</label>
+              <div className="grid grid-cols-4 gap-2">
+                {UNITS.map(([v,l]) => (
+                  <button key={v} type="button" onClick={() => setForm(f => ({ ...f, unidad: v }))}
+                    className={`py-2 rounded-lg text-xs font-medium border transition-colors ${form.unidad===v ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="label">Precio (S/) *</label>
+                <label className="label">Precio (S/ por {form.unidad}) *</label>
                 <input className="input" type="number" step="0.01" min="0" value={form.precio} onChange={set('precio')} required />
               </div>
               <div>
