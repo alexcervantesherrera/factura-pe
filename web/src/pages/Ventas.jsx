@@ -73,8 +73,8 @@ export default function Ventas() {
 
       {/* Detail modal */}
       {selected && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
-          <div className="bg-white rounded-t-2xl w-full max-w-md p-5 max-h-[80vh] overflow-y-auto space-y-3">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-5 pb-24 max-h-[90vh] overflow-y-auto space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Detalle de venta</h3>
               <button onClick={() => { setSelected(null); setDetail(null) }} className="text-gray-400 text-xl">✕</button>
