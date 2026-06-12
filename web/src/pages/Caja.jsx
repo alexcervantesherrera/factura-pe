@@ -10,7 +10,10 @@ function CartItem({ item, onQty, onRemove }) {
     <div className="flex items-center gap-2 py-2 border-b border-gray-100 last:border-0">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{item.nombre}</p>
-        <p className="text-xs text-gray-500">S/ {item.precio.toFixed(2)} /{item.unidad || 'pz'}</p>
+        <p className="text-xs text-gray-500">
+          S/ {(item.precioOverride ?? item.precio).toFixed(2)} /{item.unidad || 'pz'}
+          {item.precioOverride && <span className="ml-1 text-orange-500">· precio ajustado</span>}
+        </p>
       </div>
       <div className="flex items-center gap-1">
         {isGranel ? (
@@ -34,7 +37,7 @@ function CartItem({ item, onQty, onRemove }) {
         )}
       </div>
       <div className="text-right w-16">
-        <p className="text-sm font-semibold">S/ {(item.precio * item.qty).toFixed(2)}</p>
+        <p className="text-sm font-semibold">S/ {((item.precioOverride ?? item.precio) * item.qty).toFixed(2)}</p>
         <button onClick={() => onRemove(item)} className="text-xs text-red-400 hover:text-red-600">quitar</button>
       </div>
     </div>
@@ -88,11 +91,18 @@ function ScannerModal({ onScan, onClose }) {
 
 // ── Weight modal (productos a granel) ────────────────────────────────────────
 function WeightModal({ producto, onAdd, onClose }) {
-  const [qty, setQty] = useState('')
-  const unit  = producto.unidad || 'kg'
-  const total = (parseFloat(qty) || 0) * producto.precio
+  const [qty,            setQty]            = useState('')
+  const [precioOverride, setPrecioOverride] = useState('')
+  const unit         = producto.unidad || 'kg'
+  const precioEfect  = parseFloat(precioOverride) > 0 ? parseFloat(precioOverride) : producto.precio
+  const total        = (parseFloat(qty) || 0) * precioEfect
 
-  function handleKey(e) { if (e.key === 'Enter' && parseFloat(qty) > 0) onAdd(parseFloat(qty)) }
+  function doAdd() {
+    if (!(parseFloat(qty) > 0)) return
+    const po = parseFloat(precioOverride) > 0 ? parseFloat(precioOverride) : null
+    onAdd(parseFloat(qty), po)
+  }
+  function handleKey(e) { if (e.key === 'Enter') doAdd() }
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4">
@@ -108,6 +118,8 @@ function WeightModal({ producto, onAdd, onClose }) {
           <p className="font-semibold text-gray-800">{producto.nombre}</p>
           <p className="text-sm text-gray-500 mt-0.5">S/ {producto.precio.toFixed(2)} por {unit}</p>
         </div>
+
+        {/* Quantity */}
         <div className="flex items-center gap-3">
           <input
             className="input flex-1 text-3xl font-bold text-center"
@@ -120,13 +132,30 @@ function WeightModal({ producto, onAdd, onClose }) {
           />
           <span className="text-xl font-semibold text-gray-500 w-8">{unit}</span>
         </div>
+
+        {/* Price override */}
+        <div>
+          <label className="label text-xs text-gray-500">Precio unitario — déjalo vacío para usar el precio base</label>
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400 font-medium">S/</span>
+            <input
+              className="input flex-1 text-center font-semibold"
+              type="number" step="0.01" min="0.01"
+              placeholder={producto.precio.toFixed(2)}
+              value={precioOverride}
+              onChange={e => setPrecioOverride(e.target.value)}
+              onKeyDown={handleKey}
+            />
+            <span className="text-sm text-gray-400">/{unit}</span>
+          </div>
+        </div>
+
         {parseFloat(qty) > 0 && (
           <p className="text-center text-2xl font-bold text-green-700">S/ {total.toFixed(2)}</p>
         )}
         <div className="flex gap-3">
           <button className="btn-ghost flex-1" onClick={onClose}>Cancelar</button>
-          <button className="btn-success flex-1 text-base py-3"
-            onClick={() => { if (parseFloat(qty) > 0) onAdd(parseFloat(qty)) }}
+          <button className="btn-success flex-1 text-base py-3" onClick={doAdd}
             disabled={!qty || parseFloat(qty) <= 0}>
             ✓ Agregar al carrito
           </button>
@@ -359,15 +388,18 @@ export default function Caja() {
     return () => clearTimeout(t)
   }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function addToCart(prod, qty = 1) {
+  function addToCart(prod, qty = 1, precioOverride = null) {
     setCart(c => {
-      const idx = c.findIndex(x => x.id === prod.id)
+      // Granel items with a price override get their own line
+      const idx = precioOverride
+        ? -1
+        : c.findIndex(x => x.id === prod.id && !x.precioOverride)
       if (idx >= 0) {
         const next = [...c]
         next[idx] = { ...next[idx], qty: next[idx].qty + qty }
         return next
       }
-      return [...c, { ...prod, qty }]
+      return [...c, { ...prod, qty, precioOverride: precioOverride ?? undefined }]
     })
     setSearch(''); setResults([])
     searchRef.current?.focus()
@@ -457,7 +489,7 @@ export default function Caja() {
     setPayLoading(true)
     try {
       const { data } = await api.post('/ventas', {
-        items: cart.map(x => ({ productoId: x.id, cantidad: x.qty })),
+        items: cart.map(x => ({ productoId: x.id, cantidad: x.qty, precioOverride: x.precioOverride ?? null })),
         tipoComprobante: tipoComp,
         clienteId: clienteId || null,
       })
@@ -470,8 +502,8 @@ export default function Caja() {
     }
   }
 
-  const total = cart.reduce((s, x) => s + x.precio * x.qty, 0)
-  const igv   = cart.reduce((s, x) => s + (x.aplicaIgv !== false ? x.precio * x.qty * 0.18 / 1.18 : 0), 0)
+  const total = cart.reduce((s, x) => s + (x.precioOverride ?? x.precio) * x.qty, 0)
+  const igv   = cart.reduce((s, x) => s + (x.aplicaIgv !== false ? (x.precioOverride ?? x.precio) * x.qty * 0.18 / 1.18 : 0), 0)
 
   return (
     <div className="flex flex-col h-[calc(100vh-128px)]">
@@ -561,7 +593,7 @@ export default function Caja() {
       {granelItem && (
         <WeightModal
           producto={granelItem}
-          onAdd={qty => { addToCart(granelItem, qty); setGranelItem(null) }}
+          onAdd={(qty, po) => { addToCart(granelItem, qty, po); setGranelItem(null) }}
           onClose={() => setGranelItem(null)}
         />
       )}
