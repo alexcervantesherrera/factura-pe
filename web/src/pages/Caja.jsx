@@ -178,17 +178,25 @@ export default function Caja() {
   const [msg, setMsg]             = useState(null)
   const searchRef = useRef(null)
 
-  // Debounced product search
+  // Debounced product search — if input looks like a barcode, use barcode endpoint
+  const isBarcode = s => /^\d{8,14}$/.test(s.trim())
+
   useEffect(() => {
     if (!search.trim()) { setResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const { data } = await api.get('/productos', { params: { q: search } })
-        setResults(data)
+        if (isBarcode(search)) {
+          // treat typed barcode same as camera scan
+          handleScan(search.trim())
+          setSearch('')
+        } else {
+          const { data } = await api.get('/productos', { params: { q: search } })
+          setResults(data)
+        }
       } catch { setResults([]) }
-    }, 300)
+    }, 600)
     return () => clearTimeout(t)
-  }, [search])
+  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function addToCart(prod) {
     setCart(c => {
