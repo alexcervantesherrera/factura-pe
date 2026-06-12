@@ -35,8 +35,8 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="text-4xl mb-1">🧾</div>
-          <h1 className="text-xl font-bold text-gray-800">Registrar empresa</h1>
+          <div className="text-4xl mb-1">🛍️</div>
+          <h1 className="text-xl font-bold text-gray-800">Registrar empresa en vendemas</h1>
           <p className="text-gray-500 text-sm">Empieza gratis — sin tarjeta de crédito</p>
         </div>
 

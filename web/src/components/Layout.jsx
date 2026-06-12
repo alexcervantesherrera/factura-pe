@@ -21,8 +21,8 @@ export default function Layout() {
       {/* Header */}
       <header className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
         <div className="flex items-center gap-2">
-          <span className="text-xl">🧾</span>
-          <span className="font-bold text-lg">factura-pe</span>
+          <span className="text-xl">🛍️</span>
+          <span className="font-bold text-lg">vendemas</span>
           {user?.razonSocial && (
             <span className="text-blue-200 text-sm hidden sm:inline">— {user.razonSocial}</span>
           )}

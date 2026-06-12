@@ -1,5 +1,112 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import api from '../api'
+
+// ── Auto-photo modal: fetches Wikipedia thumbnails for all products without image ──
+function FotosAutoModal({ onClose, onDone }) {
+  const [status,   setStatus]   = useState('idle')   // idle | running | done
+  const [done,     setDone]     = useState(0)
+  const [found,    setFound]    = useState(0)
+  const [totalProd, setTotalProd] = useState(0)
+  const abortRef = useRef(false)
+
+  const run = useCallback(async () => {
+    abortRef.current = false
+    setStatus('running'); setDone(0); setFound(0)
+
+    // 1. Collect all products without a photo across all pages
+    const sinFoto = []
+    let pg = 1
+    while (true) {
+      const { data } = await api.get('/productos', { params: { page: pg, pageSize: 100 } })
+      const items = Array.isArray(data) ? data : (data.items ?? [])
+      sinFoto.push(...items.filter(p => !p.imagenUrl))
+      const pages = Array.isArray(data) ? 1 : (data.pages ?? 1)
+      if (pg >= pages) break
+      pg++
+    }
+    setTotalProd(sinFoto.length)
+    if (sinFoto.length === 0) { setStatus('done'); return }
+
+    // 2. Process in batches of 4 in parallel
+    for (let i = 0; i < sinFoto.length; i += 4) {
+      if (abortRef.current) break
+      const batch = sinFoto.slice(i, i + 4)
+      await Promise.all(batch.map(async prod => {
+        try {
+          // Try Spanish Wikipedia first, fall back to English
+          const term = prod.nombre.split('(')[0].trim().split(' ').slice(0, 2).join(' ')
+          let imgUrl = null
+          for (const lang of ['es', 'en']) {
+            const r = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`)
+            const w = await r.json()
+            if (w.thumbnail?.source) { imgUrl = w.thumbnail.source; break }
+          }
+          if (imgUrl) {
+            await api.put(`/productos/${prod.id}`, {
+              codigoBarras: prod.codigoBarras ?? null, nombre: prod.nombre,
+              categoria: prod.categoria ?? null, imagenUrl: imgUrl,
+              precio: prod.precio, aplicaIgv: prod.aplicaIgv,
+              stock: prod.stock, controlStock: prod.controlStock, unidad: prod.unidad ?? 'pz',
+            })
+            setFound(f => f + 1)
+          }
+        } catch {}
+        setDone(d => d + 1)
+      }))
+    }
+    setStatus('done')
+    onDone?.()
+  }, [onDone])
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-[110] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-lg">📸 Fotos automáticas</h3>
+          <button onClick={() => { abortRef.current = true; onClose() }} className="text-gray-400 text-xl">✕</button>
+        </div>
+
+        {status === 'idle' && (
+          <>
+            <p className="text-sm text-gray-600">
+              Busca una foto en Wikipedia para cada producto sin imagen.
+              Tarda ~1 min para 130 productos.
+            </p>
+            <button className="btn-primary w-full py-3" onClick={run}>
+              🚀 Iniciar
+            </button>
+          </>
+        )}
+
+        {status === 'running' && (
+          <>
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p className="font-semibold text-gray-800">{done} / {totalProd} procesados</p>
+              <p className="text-green-600 font-medium">{found} fotos encontradas ✓</p>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-3">
+              <div className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${totalProd ? Math.round((done / totalProd) * 100) : 0}%` }} />
+            </div>
+            <p className="text-xs text-center text-gray-400">No cierres esta ventana...</p>
+          </>
+        )}
+
+        {status === 'done' && (
+          <>
+            <div className="text-center space-y-2">
+              <div className="text-5xl">✅</div>
+              <p className="font-bold text-lg text-green-700">{found} fotos agregadas</p>
+              <p className="text-sm text-gray-500">{totalProd - found} productos sin foto en Wikipedia</p>
+            </div>
+            <button className="btn-primary w-full" onClick={onClose}>Listo</button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const UNITS = [['pz','📦 Pieza'],['kg','⚖️ Kilo'],['g','🏷️ Gramo'],['L','🥛 Litro']]
 
@@ -20,18 +127,23 @@ export default function Productos() {
   const [form, setForm]           = useState(empty)
   const [loading, setLoading]     = useState(false)
   const [barcodeSearching, setBarcodeSearching] = useState(false)
-  const [importing, setImporting] = useState(false)
-  const [importMsg, setImportMsg] = useState(null)
+  const [importing,     setImporting]     = useState(false)
+  const [importMsg,     setImportMsg]     = useState(null)
+  const [photoSearching, setPhotoSearching] = useState(false)
+  const [showFotosAuto, setShowFotosAuto] = useState(false)
   const photoRef = useRef(null)
 
   async function load(q = '', pg = 1) {
     const params = { page: pg, pageSize: PAGE_SIZE }
     if (q) params.q = q
     const { data } = await api.get('/productos', { params })
-    setProductos(data.items)
-    setTotal(data.total)
-    setPage(data.page)
-    setPages(data.pages)
+    // Support both paginated { items, total, page, pages } and legacy flat array
+    if (Array.isArray(data)) {
+      setProductos(data); setTotal(data.length); setPage(1); setPages(1)
+    } else {
+      setProductos(data.items ?? []); setTotal(data.total ?? 0)
+      setPage(data.page ?? 1);        setPages(data.pages ?? 1)
+    }
   }
 
   useEffect(() => { load() }, [])
@@ -76,6 +188,24 @@ export default function Productos() {
       img.src = ev.target.result
     }
     reader.readAsDataURL(file)
+  }
+
+  // ── Wikipedia auto-photo for the product being edited ─────────────────────
+  async function lookupWikiPhoto() {
+    if (!form.nombre) return
+    setPhotoSearching(true)
+    try {
+      const term = form.nombre.split('(')[0].trim().split(' ').slice(0, 2).join(' ')
+      for (const lang of ['es', 'en']) {
+        const r = await fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(term)}`)
+        const w = await r.json()
+        if (w.thumbnail?.source) {
+          setForm(f => ({ ...f, imagenUrl: w.thumbnail.source }))
+          break
+        }
+      }
+    } catch {}
+    setPhotoSearching(false)
   }
 
   async function lookupBarcode() {
@@ -134,15 +264,22 @@ export default function Productos() {
         <button className="btn-primary whitespace-nowrap" onClick={openNew}>+ Nuevo</button>
       </div>
 
-      {/* Import catalog button */}
-      <button
-        onClick={importarDefaults}
-        disabled={importing}
-        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium transition-colors">
-        {importing
-          ? <><span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" /> Importando...</>
-          : <> 📦 Importar catálogo base (~130 productos peruanos)</>}
-      </button>
+      {/* Action buttons row */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          onClick={importarDefaults}
+          disabled={importing}
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-medium transition-colors">
+          {importing
+            ? <><span className="w-3 h-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" /> Importando...</>
+            : <>📦 Importar catálogo base</>}
+        </button>
+        <button
+          onClick={() => setShowFotosAuto(true)}
+          className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 hover:bg-purple-50 text-xs font-medium transition-colors">
+          📸 Fotos automáticas
+        </button>
+      </div>
 
       {/* Import result toast */}
       {importMsg && (
@@ -248,12 +385,22 @@ export default function Productos() {
                   </div>
                 )}
                 <div className="flex flex-col gap-1 flex-1">
-                  <button
-                    type="button"
-                    onClick={() => photoRef.current?.click()}
-                    className="btn-ghost text-sm py-2">
-                    📷 Tomar foto / Galería
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => photoRef.current?.click()}
+                      className="btn-ghost text-sm py-2 flex-1">
+                      📷 Tomar foto / Galería
+                    </button>
+                    <button
+                      type="button"
+                      onClick={lookupWikiPhoto}
+                      disabled={photoSearching || !form.nombre}
+                      title="Buscar foto en Wikipedia"
+                      className="btn-ghost text-sm py-2 px-3">
+                      {photoSearching ? <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" /> : '🌐'}
+                    </button>
+                  </div>
                   <input
                     ref={photoRef}
                     type="file"
@@ -327,6 +474,14 @@ export default function Productos() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* FotosAutoModal — z-[110] so it sits above edit modal (z-[100]) */}
+      {showFotosAuto && (
+        <FotosAutoModal
+          onClose={() => setShowFotosAuto(false)}
+          onDone={() => load(search, page)}
+        />
       )}
     </div>
   )
