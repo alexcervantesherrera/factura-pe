@@ -1,0 +1,171 @@
+import { useState, useEffect } from 'react'
+import api from '../api'
+
+const empty = { codigoBarras: '', nombre: '', categoria: '', imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false }
+
+export default function Productos() {
+  const [productos, setProductos] = useState([])
+  const [search, setSearch]       = useState('')
+  const [editing, setEditing]     = useState(null)  // null | {} | {id,...}
+  const [form, setForm]           = useState(empty)
+  const [loading, setLoading]     = useState(false)
+  const [barcodeSearching, setBarcodeSearching] = useState(false)
+
+  async function load(q = '') {
+    const { data } = await api.get('/productos', { params: q ? { q } : {} })
+    setProductos(data)
+  }
+
+  useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => load(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  function openNew()  { setEditing({}); setForm(empty) }
+  function openEdit(p){ setEditing(p); setForm({ codigoBarras: p.codigoBarras||'', nombre: p.nombre, categoria: p.categoria||'', imagenUrl: p.imagenUrl||'', precio: p.precio, aplicaIgv: p.aplicaIgv, stock: p.stock, controlStock: p.controlStock }) }
+  function close()    { setEditing(null) }
+
+  function set(k) { return e => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) }
+
+  async function lookupBarcode() {
+    if (!form.codigoBarras) return
+    setBarcodeSearching(true)
+    try {
+      const { data } = await api.get(`/productos/barcode/${form.codigoBarras}`)
+      if (data.found && data.sugerido) {
+        const s = data.sugerido
+        setForm(f => ({ ...f, nombre: s.nombre || f.nombre, imagenUrl: s.imagen || f.imagenUrl, categoria: s.categoria || f.categoria }))
+      }
+    } catch {}
+    setBarcodeSearching(false)
+  }
+
+  async function save() {
+    setLoading(true)
+    try {
+      const body = { ...form, precio: parseFloat(form.precio), stock: parseInt(form.stock) || 0 }
+      if (editing.id) await api.put(`/productos/${editing.id}`, body)
+      else            await api.post('/productos', body)
+      close()
+      load(search)
+    } catch (err) {
+      alert(err.response?.data || 'Error al guardar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function deactivate(id) {
+    if (!confirm('¿Desactivar este producto?')) return
+    await api.delete(`/productos/${id}`)
+    load(search)
+  }
+
+  return (
+    <div className="p-3 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <input className="input flex-1" placeholder="Buscar producto..." value={search} onChange={e => setSearch(e.target.value)} />
+        <button className="btn-primary whitespace-nowrap" onClick={openNew}>+ Nuevo</button>
+      </div>
+
+      {/* List */}
+      <div className="space-y-2">
+        {productos.map(p => (
+          <div key={p.id} className="card flex items-center gap-3">
+            {p.imagenUrl
+              ? <img src={p.imagenUrl} alt={p.nombre} className="w-12 h-12 rounded-lg object-cover" />
+              : <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-2xl">📦</div>
+            }
+            <div className="flex-1 min-w-0">
+              <p className="font-medium truncate">{p.nombre}</p>
+              <p className="text-xs text-gray-500">{p.codigoBarras || 'Sin código'} {p.categoria ? `· ${p.categoria}` : ''}</p>
+              {p.controlStock && <p className="text-xs text-blue-500">Stock: {p.stock}</p>}
+            </div>
+            <div className="text-right">
+              <p className="font-bold text-green-700">S/ {parseFloat(p.precio).toFixed(2)}</p>
+              <p className="text-xs text-gray-400">{p.aplicaIgv ? '+IGV' : 'Exonerado'}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <button onClick={() => openEdit(p)} className="text-xs text-blue-600 hover:underline">Editar</button>
+              <button onClick={() => deactivate(p.id)} className="text-xs text-red-400 hover:underline">Quitar</button>
+            </div>
+          </div>
+        ))}
+        {productos.length === 0 && (
+          <div className="text-center text-gray-400 py-12">
+            <div className="text-4xl mb-2">📦</div>
+            <p>No hay productos. ¡Agrega el primero!</p>
+          </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {editing !== null && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">{editing.id ? 'Editar producto' : 'Nuevo producto'}</h3>
+              <button onClick={close} className="text-gray-400 text-xl">✕</button>
+            </div>
+
+            {/* Barcode */}
+            <div>
+              <label className="label">Código de barras</label>
+              <div className="flex gap-2">
+                <input className="input flex-1" value={form.codigoBarras} onChange={set('codigoBarras')} placeholder="EAN-13, EAN-8..." />
+                <button onClick={lookupBarcode} disabled={barcodeSearching || !form.codigoBarras}
+                  className="btn-ghost px-3 text-sm whitespace-nowrap">
+                  {barcodeSearching ? '...' : '🔍 Buscar'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Nombre *</label>
+              <input className="input" value={form.nombre} onChange={set('nombre')} required />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label">Precio (S/) *</label>
+                <input className="input" type="number" step="0.01" min="0" value={form.precio} onChange={set('precio')} required />
+              </div>
+              <div>
+                <label className="label">Categoría</label>
+                <input className="input" value={form.categoria} onChange={set('categoria')} />
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.aplicaIgv} onChange={set('aplicaIgv')} className="w-4 h-4" />
+                <span className="text-sm">Aplica IGV (18%)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.controlStock} onChange={set('controlStock')} className="w-4 h-4" />
+                <span className="text-sm">Control stock</span>
+              </label>
+            </div>
+
+            {form.controlStock && (
+              <div>
+                <label className="label">Stock inicial</label>
+                <input className="input" type="number" min="0" value={form.stock} onChange={set('stock')} />
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button className="btn-ghost flex-1" onClick={close}>Cancelar</button>
+              <button className="btn-primary flex-1" onClick={save} disabled={loading || !form.nombre || !form.precio}>
+                {loading ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

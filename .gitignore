@@ -1,0 +1,11 @@
+# API
+api/bin/
+api/obj/
+api/.vs/
+api/appsettings.Development.json
+
+# Web
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
