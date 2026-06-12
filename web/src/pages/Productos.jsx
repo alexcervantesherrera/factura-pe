@@ -15,6 +15,8 @@ export default function Productos() {
   const [form, setForm]           = useState(empty)
   const [loading, setLoading]     = useState(false)
   const [barcodeSearching, setBarcodeSearching] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState(null)
   const photoRef = useRef(null)
 
   async function load(q = '') {
@@ -94,6 +96,20 @@ export default function Productos() {
     }
   }
 
+  async function importarDefaults() {
+    setImporting(true)
+    try {
+      const { data } = await api.post('/productos/importar-defaults')
+      setImportMsg({ type: 'ok', text: data.mensaje })
+      if (data.importados > 0) load(search)
+    } catch {
+      setImportMsg({ type: 'err', text: 'Error al importar catálogo' })
+    } finally {
+      setImporting(false)
+      setTimeout(() => setImportMsg(null), 4000)
+    }
+  }
+
   async function deactivate(id) {
     if (!confirm('¿Desactivar este producto?')) return
     await api.delete(`/productos/${id}`)
@@ -107,6 +123,23 @@ export default function Productos() {
         <input className="input flex-1" placeholder="Buscar producto..." value={search} onChange={e => setSearch(e.target.value)} />
         <button className="btn-primary whitespace-nowrap" onClick={openNew}>+ Nuevo</button>
       </div>
+
+      {/* Import catalog button */}
+      <button
+        onClick={importarDefaults}
+        disabled={importing}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 text-sm font-medium transition-colors">
+        {importing
+          ? <><span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin inline-block" /> Importando...</>
+          : <> 📦 Importar catálogo base (~130 productos peruanos)</>}
+      </button>
+
+      {/* Import result toast */}
+      {importMsg && (
+        <div className={`rounded-xl px-4 py-2 text-sm font-medium text-center ${importMsg.type === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+          {importMsg.text}
+        </div>
+      )}
 
       {/* List */}
       <div className="space-y-2">

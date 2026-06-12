@@ -94,6 +94,8 @@ app.MapPost("/auth/register", async (RegisterDto dto, AppDbContext db) =>
     };
     db.Empresas.Add(empresa);
     db.Usuarios.Add(usuario);
+    // Seed default product catalog for this new empresa
+    db.Productos.AddRange(ProductosSeed.GetDefaultProductos(empresa.Id));
     await db.SaveChangesAsync();
     return Results.Ok(new { token = GenerateToken(usuario), usuario.Nombre, usuario.Rol, empresa.RazonSocial });
 });
@@ -180,6 +182,24 @@ app.MapDelete("/productos/{id:guid}", async (Guid id, ClaimsPrincipal claims, Ap
     p.Activo = false;
     await db.SaveChangesAsync();
     return Results.NoContent();
+}).RequireAuthorization();
+
+// Import default catalog — skips products whose name already exists for this empresa
+app.MapPost("/productos/importar-defaults", async (ClaimsPrincipal claims, AppDbContext db) =>
+{
+    var eid = EmpresaId(claims);
+    var existing = await db.Productos
+        .Where(p => p.EmpresaId == eid)
+        .Select(p => p.Nombre.ToLower())
+        .ToListAsync();
+    var toAdd = ProductosSeed.GetDefaultProductos(eid)
+        .Where(p => !existing.Contains(p.Nombre.ToLower()))
+        .ToList();
+    if (toAdd.Count == 0)
+        return Results.Ok(new { importados = 0, mensaje = "El catálogo base ya está importado." });
+    db.Productos.AddRange(toAdd);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { importados = toAdd.Count, mensaje = $"{toAdd.Count} productos importados." });
 }).RequireAuthorization();
 
 // ── CLIENTES ──────────────────────────────────────────────────────────────────
