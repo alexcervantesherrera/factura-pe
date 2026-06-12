@@ -26,18 +26,33 @@ function CartItem({ item, onQty, onRemove }) {
 
 // ── Scanner modal ────────────────────────────────────────────────────────────
 function ScannerModal({ onScan, onClose }) {
+  const scannerRef = useRef(null)
+  const scannedRef = useRef(false)
+
   useEffect(() => {
-    let scanner = null
+    scannedRef.current = false
     import('html5-qrcode').then(({ Html5Qrcode }) => {
-      scanner = new Html5Qrcode('qr-reader')
-      scanner.start(
+      const s = new Html5Qrcode('qr-reader')
+      scannerRef.current = s
+      s.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: 250 },
-        code => { scanner.stop(); onScan(code) },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (code) => {
+          if (scannedRef.current) return   // ignore duplicate detections
+          scannedRef.current = true
+          try { await s.stop() } catch {}  // stop camera fully first
+          scannerRef.current = null
+          onScan(code)                     // then notify parent
+        },
         () => {}
       ).catch(() => {})
     })
-    return () => { if (scanner) scanner.stop().catch(() => {}) }
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {})
+        scannerRef.current = null
+      }
+    }
   }, [onScan])
 
   return (
