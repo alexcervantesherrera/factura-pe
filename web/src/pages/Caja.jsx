@@ -169,6 +169,7 @@ export default function Caja() {
   const [search, setSearch]       = useState('')
   const [results, setResults]     = useState([])
   const [scanning, setScanning]   = useState(false)
+  const [lookingUp, setLookingUp] = useState(false)  // spinner while barcode API resolves
   const [quickAdd, setQuickAdd]   = useState(null)   // { nombre?, codigoBarras?, imagen?, categoria? }
   const [quickSaving, setQuickSaving] = useState(false)
   const [paying, setPaying]       = useState(false)
@@ -211,16 +212,14 @@ export default function Caja() {
   // ── Barcode scanned ──────────────────────────────────────────────────────
   const handleScan = useCallback(async (code) => {
     setScanning(false)
+    setLookingUp(true)
     try {
       const { data } = await api.get(`/productos/barcode/${code}`)
 
       if (data.found && data.source === 'local') {
-        // Already in catalog → straight to cart
         addToCart({ id: data.producto.id, nombre: data.producto.nombre, precio: data.producto.precio, aplicaIgv: data.producto.aplicaIgv })
         return
       }
-
-      // Not in catalog — open QuickAdd with pre-filled data from Open Food Facts (or empty)
       setQuickAdd(
         data.found && data.sugerido
           ? { nombre: data.sugerido.nombre, codigoBarras: code, imagen: data.sugerido.imagen, categoria: data.sugerido.categoria }
@@ -228,6 +227,8 @@ export default function Caja() {
       )
     } catch {
       setQuickAdd({ codigoBarras: code })
+    } finally {
+      setLookingUp(false)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -351,9 +352,20 @@ export default function Caja() {
         </div>
       )}
 
-      {scanning  && <ScannerModal onScan={handleScan} onClose={() => setScanning(false)} />}
-      {quickAdd  && <QuickAddModal sugerido={quickAdd} onSave={handleQuickSave} onClose={() => setQuickAdd(null)} saving={quickSaving} />}
-      {paying    && <PayModal total={total} onPay={confirmPay} onClose={() => setPaying(false)} loading={payLoading} />}
+      {scanning   && <ScannerModal onScan={handleScan} onClose={() => setScanning(false)} />}
+      {quickAdd   && <QuickAddModal sugerido={quickAdd} onSave={handleQuickSave} onClose={() => setQuickAdd(null)} saving={quickSaving} />}
+      {paying     && <PayModal total={total} onPay={confirmPay} onClose={() => setPaying(false)} loading={payLoading} />}
+
+      {/* Barcode lookup spinner */}
+      {lookingUp && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+          <div className="bg-white rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-xl">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <p className="font-medium text-gray-700">Buscando producto...</p>
+            <p className="text-xs text-gray-400">Consultando catálogo y Open Food Facts</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
