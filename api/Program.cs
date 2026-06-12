@@ -262,10 +262,25 @@ app.MapGet("/ventas/{id:guid}", async (Guid id, ClaimsPrincipal claims, AppDbCon
 {
     var eid = EmpresaId(claims);
     var v = await db.Ventas
-        .Include(x => x.Detalles).ThenInclude(d => d.Producto)
-        .Include(x => x.Cliente).Include(x => x.Usuario).Include(x => x.Comprobante)
+        .Include(x => x.Detalles)
+        .Include(x => x.Cliente)
+        .Include(x => x.Usuario)
+        .Include(x => x.Comprobante)
         .FirstOrDefaultAsync(x => x.Id == id && x.EmpresaId == eid);
-    return v is null ? Results.NotFound() : Results.Ok(v);
+    if (v is null) return Results.NotFound();
+    return Results.Ok(new {
+        v.Id, v.Fecha, v.Subtotal, v.Igv, v.Total, v.Estado,
+        usuario     = v.Usuario.Nombre,
+        cliente     = v.Cliente != null ? v.Cliente.Nombre : "Consumidor final",
+        comprobante = v.Comprobante == null ? null : (object)new {
+            v.Comprobante.Tipo, v.Comprobante.Serie,
+            v.Comprobante.Correlativo, v.Comprobante.EstadoSunat
+        },
+        detalles = v.Detalles.Select(d => new {
+            d.Id, d.NombreProducto, d.PrecioUnitario,
+            d.Cantidad, d.Subtotal, d.Igv, d.Total
+        }).ToList()
+    });
 }).RequireAuthorization();
 
 app.MapPost("/ventas", async (VentaDto dto, ClaimsPrincipal claims, AppDbContext db) =>
