@@ -39,7 +39,7 @@ public class Producto
     [MaxLength(50)]  public string? CodigoBarras { get; set; }
     [MaxLength(300)] public string Nombre        { get; set; } = "";
     [MaxLength(100)] public string? Categoria    { get; set; }
-    [MaxLength(500)] public string? ImagenUrl    { get; set; }
+    public string? ImagenUrl    { get; set; }  // text — stores URL or base64 thumbnail
     [Column(TypeName="decimal(12,2)")] public decimal Precio { get; set; }
     public bool   AplicaIgv    { get; set; } = true;
     public int    Stock        { get; set; } = 0;

@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import api from '../api'
 
-const empty = { codigoBarras: '', nombre: '', categoria: '', imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false }
+const empty = {
+  codigoBarras: '', nombre: '', categoria: '',
+  imagenUrl: '', precio: '', aplicaIgv: true, stock: 0, controlStock: false,
+}
 
 export default function Productos() {
   const [productos, setProductos] = useState([])
@@ -10,6 +13,7 @@ export default function Productos() {
   const [form, setForm]           = useState(empty)
   const [loading, setLoading]     = useState(false)
   const [barcodeSearching, setBarcodeSearching] = useState(false)
+  const photoRef = useRef(null)
 
   async function load(q = '') {
     const { data } = await api.get('/productos', { params: q ? { q } : {} })
@@ -23,11 +27,42 @@ export default function Productos() {
     return () => clearTimeout(t)
   }, [search])
 
-  function openNew()  { setEditing({}); setForm(empty) }
-  function openEdit(p){ setEditing(p); setForm({ codigoBarras: p.codigoBarras||'', nombre: p.nombre, categoria: p.categoria||'', imagenUrl: p.imagenUrl||'', precio: p.precio, aplicaIgv: p.aplicaIgv, stock: p.stock, controlStock: p.controlStock }) }
-  function close()    { setEditing(null) }
+  function openNew()   { setEditing({}); setForm(empty) }
+  function openEdit(p) {
+    setEditing(p)
+    setForm({
+      codigoBarras: p.codigoBarras || '', nombre: p.nombre,
+      categoria: p.categoria || '', imagenUrl: p.imagenUrl || '',
+      precio: p.precio, aplicaIgv: p.aplicaIgv,
+      stock: p.stock, controlStock: p.controlStock,
+    })
+  }
+  function close() { setEditing(null) }
 
-  function set(k) { return e => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value })) }
+  function set(k) {
+    return e => setForm(f => ({ ...f, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+  }
+
+  // ── Compress photo to ≤300px JPEG base64 ───────────────────────────────────
+  function handlePhotoChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX = 300
+        const ratio = Math.min(MAX / img.width, MAX / img.height, 1)
+        const canvas = document.createElement('canvas')
+        canvas.width  = Math.round(img.width  * ratio)
+        canvas.height = Math.round(img.height * ratio)
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        setForm(f => ({ ...f, imagenUrl: canvas.toDataURL('image/jpeg', 0.78) }))
+      }
+      img.src = ev.target.result
+    }
+    reader.readAsDataURL(file)
+  }
 
   async function lookupBarcode() {
     if (!form.codigoBarras) return
@@ -102,10 +137,10 @@ export default function Productos() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Modal — z-[100] so it sits above bottom nav (z-[90]) */}
       {editing !== null && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
-          <div className="bg-white rounded-t-2xl w-full max-w-md p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-5 pb-24 space-y-3 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-lg">{editing.id ? 'Editar producto' : 'Nuevo producto'}</h3>
               <button onClick={close} className="text-gray-400 text-xl">✕</button>
@@ -120,6 +155,49 @@ export default function Productos() {
                   className="btn-ghost px-3 text-sm whitespace-nowrap">
                   {barcodeSearching ? '...' : '🔍 Buscar'}
                 </button>
+              </div>
+            </div>
+
+            {/* Photo */}
+            <div>
+              <label className="label">Foto del producto</label>
+              <div className="flex items-center gap-3">
+                {form.imagenUrl ? (
+                  <div className="relative">
+                    <img src={form.imagenUrl} alt="preview" className="w-16 h-16 rounded-xl object-cover border border-gray-200" />
+                    <button
+                      onClick={() => setForm(f => ({ ...f, imagenUrl: '' }))}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center leading-none">
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center text-3xl border border-dashed border-gray-300">
+                    📷
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => photoRef.current?.click()}
+                    className="btn-ghost text-sm py-2">
+                    📷 Tomar foto / Galería
+                  </button>
+                  <input
+                    ref={photoRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                  <input
+                    className="input text-xs"
+                    placeholder="o pega una URL de imagen"
+                    value={form.imagenUrl?.startsWith('data:') ? '' : form.imagenUrl}
+                    onChange={set('imagenUrl')}
+                  />
+                </div>
               </div>
             </div>
 

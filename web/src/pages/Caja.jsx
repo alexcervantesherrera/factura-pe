@@ -138,9 +138,24 @@ function QuickAddModal({ sugerido, onSave, onClose, saving }) {
 
 // ── Payment modal ────────────────────────────────────────────────────────────
 function PayModal({ total, onPay, onClose, loading }) {
-  const [tipoComp, setTipoComp] = useState('03')
-  const [efectivo, setEfectivo] = useState(Math.ceil(total).toString())
+  const [tipoComp,       setTipoComp]       = useState('03')
+  const [efectivo,       setEfectivo]       = useState(Math.ceil(total).toString())
+  const [clientes,       setClientes]       = useState([])
+  const [clientQ,        setClientQ]        = useState('')
+  const [selectedClient, setSelectedClient] = useState(null)
   const vuelto = Math.max(0, parseFloat(efectivo || 0) - total)
+
+  // Load client list once when modal opens
+  useEffect(() => {
+    api.get('/clientes').then(r => setClientes(r.data)).catch(() => {})
+  }, [])
+
+  const filteredClients = clientQ.trim()
+    ? clientes.filter(c =>
+        c.nombre.toLowerCase().includes(clientQ.toLowerCase()) ||
+        c.numDoc.includes(clientQ)
+      ).slice(0, 6)
+    : []
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-end justify-center">
@@ -149,10 +164,13 @@ function PayModal({ total, onPay, onClose, loading }) {
           <h3 className="font-semibold text-lg">Cobrar venta</h3>
           <button onClick={onClose} className="text-gray-400 text-xl">✕</button>
         </div>
+
         <div className="bg-green-50 rounded-xl p-4 text-center">
           <p className="text-sm text-gray-500">Total a cobrar</p>
           <p className="text-4xl font-bold text-green-700">S/ {total.toFixed(2)}</p>
         </div>
+
+        {/* Comprobante type */}
         <div>
           <label className="label">Comprobante</label>
           <div className="grid grid-cols-2 gap-2">
@@ -164,13 +182,68 @@ function PayModal({ total, onPay, onClose, loading }) {
             ))}
           </div>
         </div>
+
+        {/* Client selector */}
+        <div>
+          <label className="label">
+            Cliente
+            {tipoComp === '01' && <span className="text-red-500 ml-1">*</span>}
+          </label>
+          {selectedClient ? (
+            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-800">{selectedClient.nombre}</p>
+                <p className="text-xs text-blue-600">
+                  {selectedClient.tipoDoc === '6' ? 'RUC' : 'DNI'}: {selectedClient.numDoc}
+                </p>
+              </div>
+              <button
+                onClick={() => { setSelectedClient(null); setClientQ('') }}
+                className="text-blue-400 hover:text-blue-600 text-lg">✕</button>
+            </div>
+          ) : (
+            <div className="relative">
+              <input
+                className="input"
+                placeholder={tipoComp === '01' ? 'Buscar por nombre o RUC...' : 'Consumidor Final (opcional)'}
+                value={clientQ}
+                onChange={e => setClientQ(e.target.value)}
+              />
+              {filteredClients.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-44 overflow-y-auto">
+                  {filteredClients.map(c => (
+                    <button key={c.id}
+                      onClick={() => { setSelectedClient(c); setClientQ('') }}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 border-b border-gray-100 last:border-0">
+                      <p className="text-sm font-medium">{c.nombre}</p>
+                      <p className="text-xs text-gray-500">
+                        {c.tipoDoc === '6' ? 'RUC' : 'DNI'}: {c.numDoc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {!selectedClient && (
+            <p className="text-xs text-gray-400 mt-1">
+              {tipoComp === '01' ? 'Factura requiere cliente con RUC' : 'Sin cliente = Consumidor Final'}
+            </p>
+          )}
+        </div>
+
+        {/* Cash received */}
         <div>
           <label className="label">Efectivo recibido</label>
           <input className="input text-xl font-semibold" type="number" step="0.10"
             value={efectivo} onChange={e => setEfectivo(e.target.value)} />
           {vuelto > 0 && <p className="text-sm text-blue-600 mt-1 font-medium">Vuelto: S/ {vuelto.toFixed(2)}</p>}
         </div>
-        <button className="btn-success w-full text-lg py-3" onClick={() => onPay(tipoComp)} disabled={loading}>
+
+        <button
+          className="btn-success w-full text-lg py-3"
+          onClick={() => onPay(tipoComp, selectedClient?.id || null)}
+          disabled={loading || (tipoComp === '01' && !selectedClient)}>
           {loading ? 'Procesando...' : '✓ Confirmar cobro'}
         </button>
       </div>
@@ -275,12 +348,13 @@ export default function Caja() {
   }
 
   // ── Confirm sale ─────────────────────────────────────────────────────────
-  async function confirmPay(tipoComp) {
+  async function confirmPay(tipoComp, clienteId) {
     setPayLoading(true)
     try {
       const { data } = await api.post('/ventas', {
         items: cart.map(x => ({ productoId: x.id, cantidad: x.qty })),
         tipoComprobante: tipoComp,
+        clienteId: clienteId || null,
       })
       setLastVenta(data); setCart([]); setPaying(false)
     } catch (err) {
